@@ -86,3 +86,4 @@ def one_hot_encode_seqs(seq_arr: List[str]) -> ArrayLike:
                 encoded_seq = encoded_seq +(G)
         encoded_list.append(encoded_seq)
     return encoded_list
+

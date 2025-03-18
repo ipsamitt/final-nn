@@ -1,7 +1,8 @@
 import pytest
 import numpy as np
 from nn import nn # Import your NeuralNetwork class
-from keras.losses import binary_crossentropy
+from nn import preprocess # Import your NeuralNetwork class
+from nn import io # Import your NeuralNetwork class
 
 
 nn_arch = [{'input_dim': 2, 'output_dim': 2, 'activation': 'relu'}, {'input_dim': 2, 'output_dim': 1, 'activation': 'sigmoid'}]
@@ -33,7 +34,7 @@ def test_single_backprop():
     A_prev = np.array([[1, 2], [3, 4]])
     dA_curr = np.array([[0.1, 0.2], [0.3, 0.4]])
     
-    dA_prev, dW, db = sample_nn._single_backprop(W, b, Z, A_prev, dA_curr, "relu")
+    dA_prev, dW, db = sample_nn._single_backprop(W, b, Z, A_prev, dA_curr, "sigmoid")
 
     assert dW.shape == W.shape, "dW shape is incorrect"
     assert db.shape == b.shape, "db shape is incorrect"
@@ -52,7 +53,7 @@ def test_binary_cross_entropy():
     loss = sample_nn._binary_cross_entropy(y, y_hat)
     
     expected_loss = -np.mean(y * np.log(y_hat + 1e-9) + (1 - y) * np.log(1 - y_hat + 1e-9))
-    assert np.isclose(loss, expected_loss), "Binary cross-entropy loss calculation is incorrect"
+    assert np.isclose(loss, expected_loss)
 
 def test_binary_cross_entropy_backprop():
     """Test binary cross entropy backpropagation."""
@@ -61,7 +62,7 @@ def test_binary_cross_entropy_backprop():
     dA = sample_nn._binary_cross_entropy_backprop(y, y_hat)
 
     expected_dA = -(y / (y_hat + 1e-9) - (1 - y) / (1 - y_hat + 1e-9))
-    assert np.allclose(dA, expected_dA), "Binary cross-entropy backpropagation is incorrect"
+    assert np.allclose(dA, expected_dA)
 
 def test_mean_squared_error():
     """Test mean squared error loss function."""
@@ -70,7 +71,7 @@ def test_mean_squared_error():
     loss = sample_nn._mean_squared_error(y, y_hat)
 
     expected_loss = np.mean(np.power(y - y_hat, 2))
-    assert np.isclose(loss, expected_loss), "MSE loss calculation is incorrect"
+    assert np.isclose(loss, expected_loss)
 
 def test_mean_squared_error_backprop():
     """Test mean squared error backpropagation."""
@@ -79,12 +80,27 @@ def test_mean_squared_error_backprop():
     dA = sample_nn._mean_squared_error_backprop(y, y_hat)
 
     expected_dA = 2 * (y_hat - y) / y.shape[0]
-    assert np.allclose(dA, expected_dA), "MSE backpropagation is incorrect"
+    assert np.allclose(dA, expected_dA)
+
 
 def test_sample_seqs():
     """Placeholder for sample sequence testing."""
-    pass
+    pos_seqs = io.read_text_file("data/rap1-lieb-positives.txt")
+    neg_seqs = io.read_fasta_file("data/yeast-upstream-1k-negative.fa")
+
+    labels = ([True] * len(pos_seqs)) + [False] * (len(neg_seqs))
+
+    all_seqs = pos_seqs + neg_seqs
+    sampled_seqs, sampled_labels = preprocess.sample_seqs(all_seqs, labels)
+
+    true_count = sum(bool(x) for x in sampled_labels)
+    false_count = sum(not bool(x) for x in sampled_labels)
+    assert(true_count == false_count)
+
 
 def test_one_hot_encode_seqs():
     """Placeholder for one-hot encoding sequence testing."""
-    pass
+    test_seqs = ["AG", "CT"]
+    encoded_seqs = [[1, 0, 0, 0, 0, 0, 0, 1], [0, 0, 1, 0, 0, 1, 0, 0]]
+
+    assert(encoded_seqs == preprocess.one_hot_encode_seqs(test_seqs))

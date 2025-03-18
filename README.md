@@ -1,3 +1,4 @@
+[![.github/workflows/main.yml](https://github.com/ipsamitt/final-nn/actions/workflows/main.yml/badge.svg)](https://github.com/ipsamitt/final-nn/actions/workflows/main.yml)
 # Final project: neural network
 
 ## Overview

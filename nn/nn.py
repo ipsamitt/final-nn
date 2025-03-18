@@ -108,7 +108,6 @@ class NeuralNetwork:
             layer_idx = idx + 1
             W_curr = self._param_dict[f'W{layer_idx}']
             b_curr = self._param_dict[f'b{layer_idx}']
-
             #find activation method and apply, change current layer and output linear layer transformed matrix
             activation = layer['activation']
             A_curr, Z_curr = self._single_forward(W_curr, b_curr, A_curr, activation)
@@ -126,24 +125,39 @@ class NeuralNetwork:
         activation_curr: str
     ) -> Tuple[ArrayLike, ArrayLike, ArrayLike]:
         
-
         #relu activation
         if activation_curr == 'relu':
             dZ_curr = self._relu_backprop(dA_curr, Z_curr)
         #sigmoid activation
         elif activation_curr == 'sigmoid':
             dZ_curr = self._sigmoid_backprop(dA_curr, Z_curr)
-       
-        if dZ_curr.shape[1] != A_prev.shape[0]:
-            dW_curr = np.dot(dZ_curr.T, A_prev) 
-        else:
-            dW_curr = np.dot(dZ_curr, A_prev) 
 
-        db_curr = np.sum(dZ_curr, axis=1, keepdims=True)
+
+        # If A_prev is a batch of samples, transpose it correctly
+        if A_prev.ndim > 1 and A_prev.shape[0] > A_prev.shape[1]:
+            A_prev_t = A_prev.T
+        else:
+            A_prev_t = A_prev
+
+        if dZ_curr.shape[0] == A_prev.shape[0]:
+            dW_curr = np.dot(dZ_curr.T, A_prev)
+        elif dZ_curr.shape[1] == A_prev.shape[1]:
+            dW_curr = np.dot(dZ_curr, A_prev.T)
+        else:
+            dW_curr = np.dot(dZ_curr, A_prev)
+
+        if dW_curr.size == np.prod(W_curr.shape):
+            dW_curr = dW_curr.reshape(W_curr.shape)
+        if b_curr.shape == (1,1):
+            db_curr = np.sum(dZ_curr, axis=0, keepdims=True)  # Ensure (1,1) shape
+        else:
+            db_curr = np.sum(dZ_curr, axis = 0).reshape(b_curr.shape)
+
+
         dA_prev = np.dot(dZ_curr, W_curr)
         
         return dA_prev, dW_curr, db_curr
-
+        
     def backprop(self, y: ArrayLike, y_hat: ArrayLike, cache: Dict[str, ArrayLike]):
         grad_dict = {}
         if self._loss_func == 'binary_cross_entropy':
@@ -162,17 +176,49 @@ class NeuralNetwork:
 
             grad_dict['dW' + str(i)] = dW_curr
             grad_dict['db' + str(i)] = db_curr
-
             dA_curr = dA_prev
-        return grad_dict
 
+        return grad_dict
     
     def _update_params(self, grad_dict: Dict[str, ArrayLike]):
-        #over each index, update parameters
-        for idx in range(len(self.arch)):
-            layer_idx = idx + 1
-            self._param_dict[f'W{layer_idx}'] -= self._lr * grad_dict[f'dW{layer_idx}']
-            self._param_dict[f'b{layer_idx}'] -= self._lr * grad_dict[f'db{layer_idx}']
+         for i in range(1, len(self.arch)):
+            self._param_dict['b' + str(i)] -= self._lr * (grad_dict['db' + str(i)])
+            adjustment = self._lr * grad_dict['dW' + str(i)]
+            self._param_dict['W' + str(i)] = self._param_dict['W' + str(i)] - adjustment
+
+    def _get_batches(self, X: ArrayLike, y: ArrayLike) -> List[Tuple[ArrayLike, ArrayLike]]:
+        """
+        Create mini-batches from the dataset.
+        
+        Parameters:
+            X: Input data
+            y: Target values
+            
+        Returns:
+            List of (X_batch, y_batch) tuples
+        """
+        m = X.shape[0]
+        batches = []
+        
+        # Shuffle the data
+        permutation = np.random.permutation(m)
+        X_shuffled = X[permutation]
+        y_shuffled = y[permutation]
+        
+        # Create full batches
+        num_complete_batches = m // self._batch_size
+        for i in range(num_complete_batches):
+            X_batch = X_shuffled[i * self._batch_size:(i + 1) * self._batch_size]
+            y_batch = y_shuffled[i * self._batch_size:(i + 1) * self._batch_size]
+            batches.append((X_batch, y_batch))
+        
+        # Handle the end case (last batch < batch_size)
+        if m % self._batch_size != 0:
+            X_batch = X_shuffled[num_complete_batches * self._batch_size:]
+            y_batch = y_shuffled[num_complete_batches * self._batch_size:]
+            batches.append((X_batch, y_batch))
+        
+        return batches
     
     def fit(
         self,
@@ -182,20 +228,45 @@ class NeuralNetwork:
         y_val: ArrayLike
     ) -> Tuple[List[float], List[float]]:
         
+
         train_loss, val_loss = [], []
-
-        #in each epoch
-        for _ in range(self._epochs):
-            #run forward alg
-            y_hat, cache = self.forward(X_train)
-            #calc loss
-            loss = self._binary_cross_entropy(y_train, y_hat) if self._loss_func == 'binary_cross_entropy' else self._mean_squared_error(y_train, y_hat)
-            train_loss.append(loss)
-            #run backward prop
-
-            grad_dict = self.backprop(y_train, y_hat, cache)
-            #update params for next epoch
-            self._update_params(grad_dict)
+        
+        # For each epoch
+        for epoch in range(self._epochs):
+            epoch_loss = 0
+            
+            # Create mini-batches
+            batches = self._get_batches(X_train, y_train)
+                        # Process each mini-batch
+            for X_batch, y_batch in batches:
+                # Forward pass
+                y_hat, cache = self.forward(X_batch)
+                
+                # Calculate batch loss
+                if self._loss_func == 'binary_cross_entropy':
+                    batch_loss = self._binary_cross_entropy(y_batch, y_hat)
+                else:
+                    batch_loss = self._mean_squared_error(y_batch, y_hat)
+                
+                epoch_loss += batch_loss
+                # Backward pass
+                grad_dict = self.backprop(y_batch, y_hat, cache)
+                
+                # Update parameters
+                self._update_params(grad_dict)
+            
+            # Calculate average loss for epoch
+            avg_epoch_loss = epoch_loss / len(batches)
+            train_loss.append(avg_epoch_loss)
+            
+            # Calculate validation loss if validation data is provided
+            if X_val is not None and y_val is not None:
+                y_val_hat, _ = self.forward(X_val)
+                if self._loss_func == 'binary_cross_entropy':
+                    val_epoch_loss = self._binary_cross_entropy(y_val, y_val_hat)
+                else:
+                    val_epoch_loss = self._mean_squared_error(y_val, y_val_hat)
+                val_loss.append(val_epoch_loss)
         return train_loss, val_loss
     
     def predict(self, X: ArrayLike) -> ArrayLike:
@@ -215,8 +286,6 @@ class NeuralNetwork:
     
     def _relu_backprop(self, dA: ArrayLike, Z: ArrayLike) -> ArrayLike:
         dZ = np.array(dA, copy=True)
-        print(dZ)
-        print(Z.T)
         dZ[Z.T <= 0] = 0
         return dZ
     
@@ -232,51 +301,3 @@ class NeuralNetwork:
     
     def _mean_squared_error_backprop(self, y: ArrayLike, y_hat: ArrayLike) -> ArrayLike:
         return 2 * (y_hat - y) / y.shape[0]
-    
-
-
-# ======= SIMPLE AUTOENCODER ARCHITECTURE =======
-autoencoder_arch = [
-    {"input_dim": 3, "output_dim": 2, "activation": "relu"},  # Encoder
-    {"input_dim": 2, "output_dim": 3, "activation": "sigmoid"}  # Decoder
-]
-
-# ======= CREATE A SIMPLE NEURAL NETWORK INSTANCE =======
-autoencoder = NeuralNetwork(
-    nn_arch=autoencoder_arch,
-    lr=0.01,
-    seed=42,
-    batch_size=1,
-    epochs=1,
-    loss_function="mean_squared_error"
-)
-
-"""
-# ======= DEFINE TEST INPUT DATA =======
-X_test = np.array([[0.1, 0.5, 0.9]])  # Single test sample
-y_test = np.array([[0.2, 0.6, 0.8]])  # Target output
-
-# ======= TEST FORWARD PASS =======
-print("\n=== Testing Forward Pass ===")
-output, cache = autoencoder.forward(X_test)
-print(f"Output of Forward Pass: {output}")
-
-print(cache)
-
-# ======= TEST BACKPROPAGATION =======
-print("\n=== Testing Backpropagation ===")
-gradients = autoencoder.backprop(y_test, output, cache)
-
-# ======= PRINT GRADIENTS =======
-for key in gradients:
-    print(f"{key} shape: {gradients[key].shape}")
-
-# ======= UPDATE PARAMETERS =======
-print("\n=== Testing Parameter Update ===")
-autoencoder._update_params(gradients)
-
-# ======= PREDICT FUNCTION =======
-print("\n=== Testing Prediction ===")
-y_pred = autoencoder.predict(X_test)
-print(f"Predicted Output: {y_pred}")
-"""

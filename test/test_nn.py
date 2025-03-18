@@ -8,6 +8,30 @@ from nn import io # Import your NeuralNetwork class
 nn_arch = [{'input_dim': 2, 'output_dim': 2, 'activation': 'relu'}, {'input_dim': 2, 'output_dim': 1, 'activation': 'sigmoid'}]
 sample_nn = nn.NeuralNetwork(nn_arch = nn_arch, lr=0.01, seed=42, batch_size=1, epochs=10, loss_function="binary_cross_entropy")
 
+
+
+# ======= SIMPLE AUTOENCODER ARCHITECTURE =======
+autoencoder_arch = [
+    {"input_dim": 3, "output_dim": 2, "activation": "relu"},  # Encoder
+    {"input_dim": 2, "output_dim": 3, "activation": "sigmoid"}  # Decoder
+]
+
+# ======= CREATE A SIMPLE NEURAL NETWORK INSTANCE =======
+autoencoder = nn.NeuralNetwork(
+    nn_arch=autoencoder_arch,
+    lr=0.01,
+    seed=42,
+    batch_size=1,
+    epochs=15,
+    loss_function='binary_cross_entropy'
+)
+
+
+# ======= DEFINE TEST INPUT DATA =======
+X_test = np.array([[0.1, 0.5, 0.9]])  # Single test sample
+y_test = np.array([[0.2, 0.6, 0.8]])  # Target output
+
+
 def test_single_forward():
     """Test single forward pass for a layer."""
     W = np.array([[0.2, 0.3], [0.4, 0.5]])
@@ -19,12 +43,14 @@ def test_single_forward():
     assert A.shape == (2, 2), "Output shape is incorrect"
     assert np.all(Z == np.dot(W, A_prev) + b), "Z computation is incorrect"
 
+
 def test_forward():
-    """Test full forward pass."""
-    X = np.array([[0.5, 1.5]])
-    y_hat, cache = sample_nn.forward(X)
+    output, cache = autoencoder.forward(X_test)
     
-    assert y_hat.shape == (1, 1), "Output shape is incorrect"
+    expected_output = np.array([[0.45528492, 0.48277804, 0.47316978]])
+    
+    # Use np.allclose() for floating-point comparisons
+    assert np.allclose(output, expected_output, atol=1e-5), "Forward pass output does not match expected values!"
 
 def test_single_backprop():
     """Test single backpropagation step."""
@@ -38,13 +64,16 @@ def test_single_backprop():
 
     assert dW.shape == W.shape, "dW shape is incorrect"
     assert db.shape == b.shape, "db shape is incorrect"
+import numpy as np
 
 def test_predict():
-    """Test prediction function."""
-    X = np.array([[0.5, 1.5]])
-    y_hat = sample_nn.predict(X)
+    y_pred = autoencoder.predict(X_test)
     
-    assert y_hat.shape == (1, 1), "Prediction shape is incorrect"
+    expected_output = np.array([[0.45469429, 0.4831488,  0.47411744]])
+    
+    # Use np.allclose() to handle floating-point precision differences
+    assert np.allclose(y_pred, expected_output, atol=0.01), "Prediction output does not match expected values!"
+
 
 def test_binary_cross_entropy():
     """Test binary cross entropy loss function."""

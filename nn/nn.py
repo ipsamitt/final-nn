@@ -186,17 +186,8 @@ class NeuralNetwork:
             adjustment = self._lr * grad_dict['dW' + str(i)]
             self._param_dict['W' + str(i)] = self._param_dict['W' + str(i)] - adjustment
 
+#MY METHOD TO SPLIT INTO BATCHES
     def _get_batches(self, X: ArrayLike, y: ArrayLike) -> List[Tuple[ArrayLike, ArrayLike]]:
-        """
-        Create mini-batches from the dataset.
-        
-        Parameters:
-            X: Input data
-            y: Target values
-            
-        Returns:
-            List of (X_batch, y_batch) tuples
-        """
         m = X.shape[0]
         batches = []
         
